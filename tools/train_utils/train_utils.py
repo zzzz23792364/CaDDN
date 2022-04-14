@@ -22,6 +22,9 @@ def train_one_epoch(model, optimizer, train_loader, model_func, lr_scheduler, ac
             batch = next(dataloader_iter)
             print('new iters')
 
+        if (batch['batch_size'] < 2):
+            continue
+
         lr_scheduler.step(accumulated_iter)
 
         try:

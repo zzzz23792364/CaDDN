@@ -12,6 +12,7 @@ import tqdm
 from nuscenes.utils.data_classes import Box
 from nuscenes.utils.geometry_utils import transform_matrix
 from pyquaternion import Quaternion
+from .generator_2dbox import get_2d_boxes
 
 map_name_from_general_to_detection = {
     'human.pedestrian.adult': 'pedestrian',
@@ -269,7 +270,17 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
         ref_lidar_path, ref_boxes, _ = get_sample_data(nusc, ref_sd_token)
 
         ref_cam_front_token = sample['data']['CAM_FRONT']
+        ref_cam_front_sd_rec = nusc.get('sample_data', ref_cam_front_token)
         ref_cam_path, _, ref_cam_intrinsic = nusc.get_sample_data(ref_cam_front_token)
+        ref_cam_front_cs_rec = nusc.get('calibrated_sensor', ref_cam_front_sd_rec['calibrated_sensor_token'])
+        ref_cam_front_pose_rec = nusc.get('ego_pose', ref_cam_front_sd_rec['ego_pose_token'])
+        ref_2d_boxes = get_2d_boxes(nusc, ref_cam_front_token)
+
+        trans_lidar_to_cam = \
+            transform_matrix(ref_cam_front_cs_rec['translation'], Quaternion(ref_cam_front_cs_rec['rotation']), inverse=True) \
+            @ transform_matrix(ref_cam_front_pose_rec['translation'], Quaternion(ref_cam_front_pose_rec['rotation']), inverse=True) \
+            @ transform_matrix(ref_pose_rec['translation'], Quaternion(ref_pose_rec['rotation']), inverse=False) \
+            @ transform_matrix(ref_cs_rec['translation'], Quaternion(ref_cs_rec['rotation']), inverse=False)
 
         # Homogeneous transform from ego car frame to reference frame
         ref_from_car = transform_matrix(
@@ -290,6 +301,7 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
             'ref_from_car': ref_from_car,
             'car_from_global': car_from_global,
             'timestamp': ref_time,
+            'trans_lidar_to_cam': trans_lidar_to_cam,
         }
 
         sample_data_token = sample['data'][chan]
@@ -362,8 +374,11 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
             tokens = np.array([b.token for b in ref_boxes])
             gt_boxes = np.concatenate([locs, dims, rots, velocity[:, :2]], axis=1)
 
-            assert len(annotations) == len(gt_boxes) == len(velocity)
+            gt_boxes2d = np.array([b['bbox_corners'] for b in ref_2d_boxes]).reshape(-1, 4)
 
+            assert len(annotations) == len(gt_boxes) == len(velocity)
+            
+            info['gt_boxes2d'] = gt_boxes2d
             info['gt_boxes'] = gt_boxes[mask, :]
             info['gt_boxes_velocity'] = velocity[mask, :]
             info['gt_names'] = np.array([map_name_from_general_to_detection[name] for name in names])[mask]

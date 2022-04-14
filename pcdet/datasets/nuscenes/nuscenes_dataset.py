@@ -9,6 +9,9 @@ from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from ...utils import common_utils
 from ..dataset import DatasetTemplate
 
+from skimage import io
+import skimage.transform
+
 
 class NuScenesDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
@@ -108,6 +111,45 @@ class NuScenesDataset(DatasetTemplate):
         points = np.concatenate((points, times), axis=1)
         return points
 
+    def get_image(self, index):
+        """
+        Loads image for a sample
+        Args:
+            idx [int]: Index of the image sample
+        Returns:
+            image [np.ndarray(H, W, 3)]: RGB Image
+        """
+        info = self.infos[index]
+        img_file = self.root_path / info['cam_front_path']
+        assert img_file.exists()
+        image = io.imread(img_file)
+        image = skimage.transform.resize(image, (image.shape[0] // 2, image.shape[1] // 2),
+                       anti_aliasing=True)
+        image = image[:, :, :3]  # Remove alpha channel
+        image = image.astype(np.float32)
+        image /= 255.0
+        return image
+
+    def get_depth_map(self, index):
+        """
+        Loads depth map for a sample
+        Args:
+            idx [str]: Index of the sample
+        Returns:
+            depth [np.ndarray(H, W)]: Depth map
+        """
+        info = self.infos[index]
+        depth_file = self.root_path / info['cam_front_path']
+        assert depth_file.exists()
+        depth = io.imread(depth_file, as_gray=True)
+        depth = skimage.transform.resize(depth, (depth.shape[0] // 2, depth.shape[1] // 2),
+                       anti_aliasing=True)
+        depth = depth.astype(np.float32)
+        depth /= 256.0
+        depth = skimage.transform.downscale_local_mean(image=depth,
+                                                       factors=(self.depth_downsample_factor, self.depth_downsample_factor))
+        return depth
+
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
             return len(self.infos) * self.total_epochs
@@ -124,7 +166,10 @@ class NuScenesDataset(DatasetTemplate):
         input_dict = {
             'points': points,
             'frame_id': Path(info['lidar_path']).stem,
-            'metadata': {'token': info['token']}
+            'metadata': {'token': info['token']},
+            'index': index,
+            'gt_boxes2d': info['gt_boxes2d'],
+            'points': points,
         }
 
         if 'gt_boxes' in info:
@@ -138,8 +183,10 @@ class NuScenesDataset(DatasetTemplate):
                 'gt_boxes': info['gt_boxes'] if mask is None else info['gt_boxes'][mask]
             })
 
+        input_dict = self.update_data(data_dict=input_dict)
         data_dict = self.prepare_data(data_dict=input_dict)
-
+        data_dict['image_shape'] = data_dict['images'].shape[:2]
+    
         if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False):
             gt_boxes = data_dict['gt_boxes']
             gt_boxes[np.isnan(gt_boxes)] = 0
@@ -147,6 +194,36 @@ class NuScenesDataset(DatasetTemplate):
 
         if not self.dataset_cfg.PRED_VELOCITY and 'gt_boxes' in data_dict:
             data_dict['gt_boxes'] = data_dict['gt_boxes'][:, [0, 1, 2, 3, 4, 5, 6, -1]]
+
+        return data_dict
+
+    def update_data(self, data_dict):
+        """
+        Updates data dictionary with additional items
+        Args:
+            data_dict [dict]: Data dictionary returned by __getitem__
+        Returns:
+            data_dict [dict]: Updated data dictionary returned by __getitem__
+        """
+        # Image
+        if "IMAGE" in self.dataset_cfg and self.dataset_cfg.IMAGE.ENABLED:
+            data_dict['images'] = self.get_image(data_dict["index"])
+
+        # Depth Map
+        if "DEPTH_MAP" in self.dataset_cfg and self.dataset_cfg.DEPTH_MAP.ENABLED:
+            data_dict['depth_maps'] = self.get_depth_map(data_dict["index"])
+            # data_dict['depth_maps'] = self.get_image(data_dict["index"])
+
+        # Calibration matricies
+        if "CALIB" in self.dataset_cfg and self.dataset_cfg.CALIB.ENABLED:
+            # Convert calibration matrices to homogeneous format and combine
+            info = self.infos[data_dict["index"]]
+            cam_intrinsic = np.concatenate((info['cam_intrinsic'], np.array([0, 0, 1], dtype=np.float32).reshape(3,1)), axis=1)
+            # print (cam_intrinsic.shape)
+            data_dict.update({
+                'trans_lidar_to_cam': info['trans_lidar_to_cam'],
+                "trans_cam_to_img": cam_intrinsic
+            })
 
         return data_dict
 
@@ -193,7 +270,11 @@ class NuScenesDataset(DatasetTemplate):
             single_pred_dict['metadata'] = batch_dict['metadata'][index]
             annos.append(single_pred_dict)
 
-        return annos
+        res = {}
+        res['points'] = batch_dict['points']
+        res['gt_boxes'] = batch_dict['gt_boxes']
+        res['pred_boxes'] = annos
+        return annos, res
 
     def evaluation(self, det_annos, class_names, **kwargs):
         import json

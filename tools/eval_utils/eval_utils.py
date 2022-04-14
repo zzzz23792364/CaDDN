@@ -36,7 +36,7 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     dataset = dataloader.dataset
     class_names = dataset.class_names
     det_annos = []
-
+    det_annos_pts = []
     logger.info('*************** EPOCH %s EVALUATION *****************' % epoch_id)
     if dist_test:
         num_gpus = torch.cuda.device_count()
@@ -58,11 +58,12 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
         disp_dict = {}
 
         statistics_info(cfg, ret_dict, metric, disp_dict)
-        annos = dataset.generate_prediction_dicts(
+        annos, annos_with_pts = dataset.generate_prediction_dicts(
             batch_dict, pred_dicts, class_names,
             output_path=final_output_dir if save_to_file else None
         )
         det_annos += annos
+        det_annos_pts.append(annos_with_pts)
         if cfg.LOCAL_RANK == 0:
             progress_bar.set_postfix(disp_dict)
             progress_bar.update()
@@ -105,7 +106,8 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
                 % (len(det_annos), total_pred_objects / max(1, len(det_annos))))
 
     with open(result_dir / 'result.pkl', 'wb') as f:
-        pickle.dump(det_annos, f)
+        # pickle.dump(det_annos, f)
+        pickle.dump(det_annos_pts, f)
 
     result_str, result_dict = dataset.evaluation(
         det_annos, class_names,
