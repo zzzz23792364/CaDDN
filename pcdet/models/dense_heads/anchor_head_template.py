@@ -166,6 +166,11 @@ class AnchorHeadTemplate(nn.Module):
         box_cls_labels = self.forward_ret_dict['box_cls_labels']
         batch_size = int(box_preds.shape[0])
 
+        # print ('box_preds = ', box_preds.shape)
+        # print ('box_dir_cls_preds = ', box_dir_cls_preds.shape)
+        # print ('box_reg_targets = ', box_reg_targets.shape)
+        # print ('box_cls_labels = ', box_cls_labels.shape)
+
         positives = box_cls_labels > 0
         reg_weights = positives.float()
         pos_normalizer = positives.sum(1, keepdim=True).float()

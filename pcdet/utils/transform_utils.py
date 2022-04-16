@@ -20,7 +20,8 @@ def project_to_image(project, points):
     # Transform points to image and get depths
     points_t = project @ points
     points_t = points_t.squeeze(dim=-1)
+    # print ('.............points_t ', points_t)
     points_img = kornia.convert_points_from_homogeneous(points_t)
     points_depth = points_t[..., -1] - project[..., 2, 3]
-
+    # print ('.............points_depth ', points_depth)
     return points_img, points_depth

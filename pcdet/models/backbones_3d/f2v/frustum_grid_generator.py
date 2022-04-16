@@ -29,13 +29,16 @@ class FrustumGridGenerator(nn.Module):
         self.voxel_size = (self.pc_max - self.pc_min) / self.grid_size
 
         # Create voxel grid
-        self.depth, self.width, self.height = self.grid_size.int()
+        # self.depth, self.width, self.height = self.grid_size.int()
+        self.width, self.depth, self.height = self.grid_size.int()
         self.voxel_grid = kornia.utils.create_meshgrid3d(depth=self.depth,
                                                          height=self.height,
                                                          width=self.width,
                                                          normalized_coordinates=False)
 
-        self.voxel_grid = self.voxel_grid.permute(0, 1, 3, 2, 4)  # XZY-> XYZ
+        # self.voxel_grid = self.voxel_grid.permute(0, 1, 3, 2, 4)  # XZY-> XYZ
+        self.voxel_grid = self.voxel_grid.permute(0, 3, 1, 2, 4)  # depth 1Y height 2Z width 3X-> XYZ
+        print ('voxel_grid ', self.voxel_grid.shape)
 
         # Add offsets to center of voxel
         self.voxel_grid += 0.5
@@ -80,6 +83,16 @@ class FrustumGridGenerator(nn.Module):
         I_C = cam_to_img  # Camera -> Image (B, 3, 4)
         trans = C_V @ V_G
 
+        # pointVeh = (0, 50, 0, 1)
+        # pointCam = lidar_to_cam.cpu().numpy()[0] @ pointVeh
+        # cam_intrinsic = cam_to_img.cpu().numpy()[0]
+        # print (cam_intrinsic)
+        # pointuv = cam_intrinsic @ pointCam
+        # print ('pointVeh ', pointVeh)
+        # print ('pointCam ', pointCam)
+        # print (pointuv / pointuv[2])
+        # print (pointuv)
+
         # Reshape to match dimensions
         trans = trans.reshape(B, 1, 1, 4, 4)
         voxel_grid = voxel_grid.repeat_interleave(repeats=B, dim=0)
@@ -90,13 +103,15 @@ class FrustumGridGenerator(nn.Module):
         # Project to image
         I_C = I_C.reshape(B, 1, 1, 3, 4)
         image_grid, image_depths = transform_utils.project_to_image(project=I_C, points=camera_grid)
+        print ('image_grid.shape ', image_grid.shape)
 
         # Convert depths to depth bins
         image_depths = depth_utils.bin_depths(depth_map=image_depths, **self.disc_cfg)
-
+        print ('image_depths.shape ', image_depths.shape)
         # Stack to form frustum grid
         image_depths = image_depths.unsqueeze(-1)
         frustum_grid = torch.cat((image_grid, image_depths), dim=-1)
+        print ('frustum_grid.shape ', frustum_grid.shape)
         return frustum_grid
 
     def forward(self, lidar_to_cam, cam_to_img, image_shape):
@@ -117,12 +132,16 @@ class FrustumGridGenerator(nn.Module):
 
         # Normalize grid
         image_shape, _ = torch.max(image_shape, dim=0)
+        # print ('image_shape ', image_shape)
         image_depth = torch.tensor([self.disc_cfg["num_bins"]], device=image_shape.device, dtype=image_shape.dtype)
         frustum_shape = torch.cat((image_depth, image_shape))
+        # print ('frustum_shape ', frustum_shape)
+        # print ('frustum_grid1 ', frustum_grid.shape)
         frustum_grid = grid_utils.normalize_coords(coords=frustum_grid, shape=frustum_shape)
+        # print ('frustum_grid2 ', frustum_grid)
 
         # Replace any NaNs or infinites with out of bounds
         mask = ~torch.isfinite(frustum_grid)
         frustum_grid[mask] = self.out_of_bounds_val
-
+        # print ('frustum_grid3 ', frustum_grid.shape)
         return frustum_grid

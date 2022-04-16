@@ -49,6 +49,7 @@ class FrustumToVoxel(nn.Module):
                                       grid=grid)  # (B, C, X, Y, Z)
 
         # (B, C, X, Y, Z) -> (B, C, Z, Y, X)
-        voxel_features = voxel_features.permute(0, 1, 4, 3, 2)
+        # voxel_features = voxel_features.permute(0, 1, 4, 3, 2)
+        voxel_features = voxel_features.permute(0, 1, 4, 2, 3) # zc (B, C, X2, Y3, Z4) -> (B, C, Z, X, Y)
         batch_dict["voxel_features"] = voxel_features
         return batch_dict

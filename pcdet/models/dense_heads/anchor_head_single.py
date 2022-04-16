@@ -47,6 +47,9 @@ class AnchorHeadSingle(AnchorHeadTemplate):
         cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
         box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
 
+        # print ('cls_preds = ', cls_preds.shape)
+        # print ('box_preds = ', box_preds.shape)
+
         self.forward_ret_dict['cls_preds'] = cls_preds
         self.forward_ret_dict['box_preds'] = box_preds
 
@@ -58,6 +61,7 @@ class AnchorHeadSingle(AnchorHeadTemplate):
             dir_cls_preds = None
 
         if self.training:
+            # print ('data_dict[gt_boxes] = ', data_dict['gt_boxes'].shape)
             targets_dict = self.assign_targets(
                 gt_boxes=data_dict['gt_boxes']
             )

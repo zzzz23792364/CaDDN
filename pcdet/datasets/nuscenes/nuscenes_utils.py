@@ -250,6 +250,24 @@ def quaternion_yaw(q: Quaternion) -> float:
     return yaw
 
 
+def checkInfo(info, nusc):
+    # lidar_path = nusc.root_path / info['lidar_path']
+    # points = np.fromfile(str(lidar_path), dtype=np.float32, count=-1).reshape([-1, 5])[:, :4]
+    trans_lidar_to_cam = info['trans_lidar_to_cam']
+    ref_cam_intrinsic = info['cam_intrinsic']
+    cam_intrinsic = info['cam_intrinsic']
+    cam_front_path = info['cam_front_path']
+    pointVeh = (0, 50, 0, 1)
+    pointCam = trans_lidar_to_cam @ pointVeh
+    print (cam_intrinsic)
+    cam_intrinsic = np.concatenate((cam_intrinsic, np.array([0, 0, 1], dtype=np.float32).reshape(3,1)), axis=1)
+    pointuv = cam_intrinsic @ pointCam
+    print ('pointVeh ', pointVeh)
+    print ('pointCam ', pointCam)
+    print (pointuv / pointuv[2])
+    print (pointuv)
+
+
 def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, max_sweeps=10):
     train_nusc_infos = []
     val_nusc_infos = []
@@ -258,7 +276,11 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
     ref_chan = 'LIDAR_TOP'  # The radar channel from which we track back n sweeps to aggregate the point cloud.
     chan = 'LIDAR_TOP'  # The reference channel of the current sample_rec that the point clouds are mapped to.
 
+    print ('----------------')
+
     for index, sample in enumerate(nusc.sample):
+        # if (index > 3):
+        #     break
         progress_bar.update()
 
         ref_sd_token = sample['data'][ref_chan]
@@ -303,6 +325,9 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
             'timestamp': ref_time,
             'trans_lidar_to_cam': trans_lidar_to_cam,
         }
+
+        # checkInfo(info, nusc)
+        # break
 
         sample_data_token = sample['data'][chan]
         curr_sd_rec = nusc.get('sample_data', sample_data_token)
@@ -367,7 +392,8 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
             mask = (num_lidar_pts + num_radar_pts > 0)
 
             locs = np.array([b.center for b in ref_boxes]).reshape(-1, 3)
-            dims = np.array([b.wlh for b in ref_boxes]).reshape(-1, 3)[:, [1, 0, 2]]  # wlh == > dxdydz (lwh)
+            # dims = np.array([b.wlh for b in ref_boxes]).reshape(-1, 3)[:, [1, 0, 2]]  # wlh == > dxdydz (lwh)
+            dims = np.array([b.wlh for b in ref_boxes]).reshape(-1, 3) # zc
             velocity = np.array([b.velocity for b in ref_boxes]).reshape(-1, 3)
             rots = np.array([quaternion_yaw(b.orientation) for b in ref_boxes]).reshape(-1, 1)
             names = np.array([b.name for b in ref_boxes])
@@ -386,9 +412,14 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
             info['num_lidar_pts'] = num_lidar_pts[mask]
             info['num_radar_pts'] = num_radar_pts[mask]
 
+        # if sample['scene_token'] in train_scenes:
+        #     train_nusc_infos.append(info)
+        # else:
+        #     val_nusc_infos.append(info)
+
         if sample['scene_token'] in train_scenes:
             train_nusc_infos.append(info)
-        else:
+        if sample['scene_token'] in val_scenes:
             val_nusc_infos.append(info)
 
     progress_bar.close()

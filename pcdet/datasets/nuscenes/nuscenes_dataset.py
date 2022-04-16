@@ -185,7 +185,8 @@ class NuScenesDataset(DatasetTemplate):
 
         input_dict = self.update_data(data_dict=input_dict)
         data_dict = self.prepare_data(data_dict=input_dict)
-        data_dict['image_shape'] = data_dict['images'].shape[:2]
+        data_dict['image_shape'] = (data_dict['images'].shape[0] * 2, data_dict['images'].shape[1] * 2)
+        # print (data_dict['image_shape'])
     
         if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False):
             gt_boxes = data_dict['gt_boxes']
@@ -392,8 +393,10 @@ def create_nuscenes_info(version, data_path, save_path, max_sweeps=10):
         train_scenes = splits.test
         val_scenes = []
     elif version == 'v1.0-mini':
-        train_scenes = splits.mini_train
-        val_scenes = splits.mini_val
+        # train_scenes = splits.mini_train
+        # val_scenes = splits.mini_val
+        train_scenes = ['scene-0061']
+        val_scenes = ['scene-0061']
     else:
         raise NotImplementedError
 
