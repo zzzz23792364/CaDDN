@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -50,7 +51,10 @@ class DepthFFE(nn.Module):
         images = batch_dict["images"]
         ddn_result = self.ddn(images)
         image_features = ddn_result["features"]
-        depth_logits = ddn_result["logits"]
+        # depth_logits = ddn_result["logits"]
+        # print ("depth_logits.shape1 = ", depth_logits.shape)
+        depth_logits = torch.Tensor(image_features.shape[0], self.disc_cfg["num_bins"] + 1, image_features.shape[2], image_features.shape[3])
+        print ("depth_logits.shape2 = ", depth_logits.shape)
 
         # Channel reduce
         if self.channel_reduce is not None:
@@ -86,6 +90,9 @@ class DepthFFE(nn.Module):
         # Apply softmax along depth axis and remove last depth category (> Max Range)
         depth_probs = F.softmax(depth_logits, dim=depth_dim)
         depth_probs = depth_probs[:, :, :-1]
+        depth_probs = torch.ones_like(depth_probs, device=image_features.device)
+        # depth_probs = 1.0 # zc
+        print ("depth_probs", depth_probs.shape)
 
         # Multiply to form image depth feature volume
         frustum_features = depth_probs * image_features

@@ -77,7 +77,8 @@ def main():
     if args.fix_random_seed:
         common_utils.set_random_seed(666)
 
-    output_dir = cfg.ROOT_DIR / 'output' / cfg.EXP_GROUP_PATH / cfg.TAG / args.extra_tag
+    output_dir = cfg.ROOT_DIR / '../../root/autodl-tmp/output' / cfg.EXP_GROUP_PATH / cfg.TAG / args.extra_tag
+    print (output_dir)
     ckpt_dir = output_dir / 'ckpt'
     output_dir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)

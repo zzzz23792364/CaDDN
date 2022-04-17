@@ -107,20 +107,20 @@ class DDNTemplate(nn.Module):
         result = OrderedDict()
         features = self.model.backbone(x)
         result['features'] = features['features']
-        feat_shape = features['features'].shape[-2:]
+        # feat_shape = features['features'].shape[-2:]
 
-        # Prediction classification logits
-        x = features["out"]
-        x = self.model.classifier(x)
-        x = F.interpolate(x, size=feat_shape, mode='bilinear', align_corners=False)
-        result["logits"] = x
+        # # Prediction classification logits
+        # x = features["out"]
+        # x = self.model.classifier(x)
+        # x = F.interpolate(x, size=feat_shape, mode='bilinear', align_corners=False)
+        # result["logits"] = x
 
-        # Prediction auxillary classification logits
-        if self.model.aux_classifier is not None:
-            x = features["aux"]
-            x = self.model.aux_classifier(x)
-            x = F.interpolate(x, size=feat_shape, mode='bilinear', align_corners=False)
-            result["aux"] = x
+        # # Prediction auxillary classification logits
+        # if self.model.aux_classifier is not None:
+        #     x = features["aux"]
+        #     x = self.model.aux_classifier(x)
+        #     x = F.interpolate(x, size=feat_shape, mode='bilinear', align_corners=False)
+        #     result["aux"] = x
 
         return result
 
